@@ -21,7 +21,7 @@ Output: -1
 
 ## Solution
 
-```
+```java
 class Solution {
     public int maxSubArray(int[] nums) {
         

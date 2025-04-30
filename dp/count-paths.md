@@ -11,7 +11,7 @@ You may assume the output will fit in a 32-bit integer.
 
 ## Solution
 
-```
+```java
 class Solution {
     public int uniquePaths(int m, int n) {
         
