@@ -1,3 +1,255 @@
+# Explain pagination and why we need it?
+
+Pagination is the process of dividing a large dataset or content into smaller, more manageable chunks called "pages," which can be retrieved or displayed incrementally rather than all at once[^1][^4][^5]. This technique is widely used in APIs, databases, and user interfaces to efficiently handle and present large volumes of data.
+
+## Why We Need Pagination
+
+**1. Improved Performance**
+
+- Retrieving and processing data in small pages significantly reduces response times for API calls and database queries. It minimizes server workload and ensures that clients receive data quickly, even when the underlying dataset is very large[^1][^4][^5][^10].
+
+**2. Reduced Resource Usage**
+
+- Pagination prevents overwhelming the server, network, and client devices by avoiding the transfer of massive datasets in a single request. This leads to lower memory consumption, reduced processing power requirements, and more efficient use of bandwidth[^1][^4][^5].
+
+**3. Enhanced User Experience**
+
+- By presenting data in smaller chunks, users can navigate data incrementally, making it easier to find and view relevant information. This results in faster page loads, smoother scrolling, and more intuitive navigation through lists or feeds[^1][^4][^5].
+
+**4. Scalability and Flexibility**
+
+- Pagination enables systems to scale efficiently as data grows. APIs and applications can handle millions of records without performance degradation, supporting use cases like infinite scroll, large reports, or real-time feeds[^1][^4][^5][^9][^11].
+
+**5. Efficient Data Transfer**
+
+- Only the needed data is sent over the network, which reduces latency and improves the responsiveness of applications and APIs[^1][^4][^5].
+
+**6. Easier Error Handling**
+
+- If a data retrieval error occurs, only the affected page needs to be reloaded, rather than the entire dataset. This makes error recovery faster and more reliable[^1][^4][^5].
+
+
+## Example
+
+Suppose an e-commerce site has 100,000 products. Instead of loading all products at once, the site uses pagination to load 20 products per page:
+
+- **Page 1:** `GET /products?page=1&limit=20` (returns products 1–20)
+- **Page 2:** `GET /products?page=2&limit=20` (returns products 21–40)
+
+This approach ensures the site loads quickly and efficiently, regardless of how many products exist.
+
+---
+
+**In summary:**
+Pagination is essential for managing large datasets efficiently. It improves performance, reduces resource usage, enhances user experience, and supports scalability by delivering data in manageable pages rather than overwhelming systems and users with massive data loads[^1][^4][^5][^9][^10][^11].
+
+<div style="text-align: center">⁂</div>
+
+[^1]: https://blog.treblle.com/api-pagination-guide-techniques-benefits-implementation/
+
+[^2]: https://appwrite.io/blog/post/best-pagination-technique
+
+[^3]: https://www.techtarget.com/whatis/definition/pagination
+
+[^4]: https://dev.to/pragativerma18/unlocking-the-power-of-api-pagination-best-practices-and-strategies-4b49
+
+[^5]: https://www.getknit.dev/blog/api-pagination-best-practices
+
+[^6]: https://stackoverflow.com/questions/55744926/offset-pagination-vs-cursor-pagination
+
+[^7]: https://planetscale.com/blog/mysql-pagination
+
+[^8]: https://developer.zendesk.com/documentation/api-basics/pagination/comparing-cursor-pagination-and-offset-pagination/
+
+[^9]: https://www.milanjovanovic.tech/blog/understanding-cursor-pagination-and-why-its-so-fast-deep-dive
+
+[^10]: https://dev.to/jacktt/comparing-limit-offset-and-cursor-pagination-1n81
+
+[^11]: https://www.contentful.com/blog/graphql-pagination-cursor-offset-tutorials/
+
+------------------
+------------------
+
+# Cursor based pagination vs Offset based pagination
+
+## Offset-Based Pagination
+
+**Definition:**
+Offset-based pagination is a method where you specify how many records to skip (the offset) and how many records to return (the limit) in each request. This approach is straightforward and commonly used in APIs and databases[^1][^2][^5][^9].
+
+**How It Works:**
+
+- The client requests a specific "page" of results by indicating the number of items to skip (offset) and how many items to fetch (limit).
+- For example, to get the first page of 10 items, you use `offset=0&limit=10`.
+- To get the second page, you use `offset=10&limit=10`, which skips the first 10 items and returns the next 10[^1][^2][^5].
+
+**Example:**
+Suppose you want to fetch product reviews, 10 per page, and you want page 3:
+
+```
+GET /v1/products/12345/reviews?offset=20&limit=10
+```
+
+This request skips the first 20 reviews and returns reviews 21–30[^1].
+
+**Advantages:**
+
+- Simple to implement and understand.
+- Works well for static or rarely changing datasets.
+
+**Limitations:**
+
+- Performance can degrade with large datasets, as the database must count and skip many records.
+- If records are inserted or deleted between requests, users may see duplicates or miss items (results can "shift")[^7][^9].
+
+---
+
+## Cursor-Based Pagination
+
+**Definition:**
+Cursor-based pagination (also known as keyset pagination) uses a unique field (like an `id` or timestamp) as a "cursor" to mark the position in the dataset. Instead of skipping a number of records, you fetch records *after* a specific cursor value[^4][^6][^8].
+
+**How It Works:**
+
+- The client requests the first page with a limit (e.g., `limit=10`).
+- The server returns the results along with a cursor (e.g., the last item's `id`).
+- For the next page, the client requests items *after* this cursor:
+
+```
+GET /v1/products/12345/reviews?after=last_seen_id&limit=10
+```
+
+- The process repeats, always using the last seen cursor value[^4][^6][^8].
+
+**Example:**
+Suppose you have a list of books with incremental IDs. To fetch the first 10 books:
+
+```
+SELECT * FROM books WHERE id > 0 ORDER BY id ASC LIMIT 10;
+```
+
+Assume the last book in the result has `id = 1009`. To fetch the next 10:
+
+```
+SELECT * FROM books WHERE id > 1009 ORDER BY id ASC LIMIT 10;
+```
+
+This ensures you always get the next set of results, even if new records are added or deleted in between[^8].
+
+**Advantages:**
+
+- More efficient for large or frequently changing datasets.
+- Avoids issues with missing or duplicated records due to inserts/deletes.
+- Better performance, as the database can use indexes instead of counting/skipping rows[^4][^6][^8].
+
+**Limitations:**
+
+- More complex to implement.
+- Not as easy to jump to arbitrary pages (e.g., "go to page 5").
+- Requires a stable, unique, and sequential field (like an auto-incrementing `id` or timestamp).
+
+---
+
+## Comparison Table
+
+| Feature | Offset-Based Pagination | Cursor-Based Pagination |
+| :-- | :-- | :-- |
+| Request Parameters | `offset`, `limit` | `cursor` (e.g., `id`), `limit` |
+| Use Case | Small/medium, static datasets | Large, dynamic datasets |
+| Performance | Slower for large offsets | Fast, even with large datasets |
+| Consistency (with updates) | Prone to duplicates/skips | Consistent, avoids duplicates |
+| Arbitrary Page Access | Easy (jump to any page) | Hard (must traverse sequentially) |
+| Implementation Complexity | Simple | More complex |
+
+
+---
+
+## Summary
+
+- **Offset-based pagination** is simple and flexible, ideal for small or static datasets, but can be inefficient and inconsistent with large or frequently changing data[^1][^2][^5][^9].
+- **Cursor-based pagination** is more robust and performant for large or dynamic datasets, preventing duplicates and skips, but is harder to implement and less flexible for random page access[^4][^6][^8].
+
+<div style="text-align: center">⁂</div>
+
+[^1]: https://www.merge.dev/blog/offset-pagination
+
+[^2]: https://www.contentful.com/blog/graphql-pagination-cursor-offset-tutorials/
+
+[^3]: https://stackoverflow.com/questions/311068/offset-vs-page-number-when-doing-pagination
+
+[^4]: https://www.milanjovanovic.tech/blog/understanding-cursor-pagination-and-why-its-so-fast-deep-dive
+
+[^5]: https://developer.box.com/guides/api-calls/pagination/offset-based/
+
+[^6]: https://www.merge.dev/blog/cursor-pagination
+
+[^7]: https://www.apollographql.com/docs/react/pagination/offset-based
+
+[^8]: https://www.pingcap.com/article/limit-offset-pagination-vs-cursor-pagination-in-mysql/
+
+[^9]: https://www.merge.dev/blog/rest-api-pagination
+
+[^10]: https://slack.engineering/evolving-api-pagination-at-slack/
+
+[^11]: https://strawberry.rocks/docs/guides/pagination/offset-based
+
+[^12]: https://planetscale.com/blog/mysql-pagination
+
+[^13]: https://stackoverflow.com/questions/55744926/offset-pagination-vs-cursor-pagination
+
+[^14]: https://www.youtube.com/watch?v=WUICbOOtAic
+
+[^15]: https://learn.microsoft.com/en-us/ef/core/querying/pagination
+
+[^16]: https://brandur.org/fragments/offset-pagination
+
+[^17]: https://www.prisma.io/docs/orm/prisma-client/queries/pagination
+
+[^18]: https://dev.to/joaofbantunes/pagination-in-an-api-page-number-vs-start-index-115g
+
+[^19]: https://www.reddit.com/r/programming/comments/knlp8a/stop_using_offset_for_pagination_why_its_grossly/
+
+[^20]: https://docs.gitlab.com/development/database/offset_pagination_optimization/
+
+[^21]: https://developer.zendesk.com/documentation/api-basics/pagination/paginating-through-lists-using-cursor-pagination/
+
+[^22]: https://www.elastic.co/docs/reference/elasticsearch/rest-apis/paginate-search-results
+
+[^23]: https://www.youtube.com/watch?v=gfRJBoOuNUA
+
+[^24]: https://stackoverflow.com/questions/18314687/how-to-implement-cursors-for-pagination-in-an-api
+
+[^25]: https://specs.openstack.org/openstack/api-wg/guidelines/pagination_filter_sort.html
+
+[^26]: https://support.safe.com/hc/en-us/articles/25407519816717-Cursor-Based-API-Pagination
+
+[^27]: https://www.contentful.com/blog/graphql-pagination-cursor-offset-tutorials/
+
+[^28]: https://stackoverflow.com/questions/34935809/jquery-if-current-number-on-pagination-is-first-or-last-disable-next-or-previo
+
+[^29]: https://www.getknit.dev/blog/api-pagination-techniques
+
+[^30]: https://www.citusdata.com/blog/2016/03/30/five-ways-to-paginate/
+
+[^31]: https://opensearch.org/docs/latest/search-plugins/searching-data/paginate/
+
+[^32]: https://solr.apache.org/guide/solr/latest/query-guide/pagination-of-results.html
+
+[^33]: https://www.linkedin.com/pulse/which-pagination-approach-should-we-use-offset-based-arghya-majumder
+
+[^34]: https://www.youtube.com/watch?v=zwDIN04lIpc
+
+[^35]: https://planetscale.com/learn/courses/mysql-for-developers/examples/cursor-pagination
+
+[^36]: https://www.apollographql.com/docs/react/pagination/cursor-based
+
+[^37]: https://jsonapi.org/profiles/ethanresnick/cursor-pagination/
+
+[^38]: https://dba.stackexchange.com/questions/328447/cursor-style-pagination-with-timestamp-id-with-a-filter-on-timestamp
+
+------------------
+------------------
+
 # Basic code for transaction filtering and pagination
 
 ```java
@@ -209,6 +461,9 @@ public class TransactionFilterEngine {
     }
 }
 ```
+
+------------------
+------------------
 
 ## A. Real-Time Data Consistency and Edge Cases
 
