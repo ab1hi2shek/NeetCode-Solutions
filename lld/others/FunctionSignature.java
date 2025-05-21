@@ -1,4 +1,4 @@
-package others;
+package lld.others;
 
 import java.util.*;
 

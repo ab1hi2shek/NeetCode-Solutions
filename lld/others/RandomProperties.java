@@ -1,9 +1,9 @@
-package others;
+package lld.others;
 
 import java.util.*;
 
-import others.Property.PropertyValue;
-import others.Property.Rarity;
+import lld.others.Property.PropertyValue;
+import lld.others.Property.Rarity;
 
 /**
  * Class to generate random properties given a list of properties.
