@@ -1,0 +1,4 @@
+Choose the method that best fits your Java version and dependencies. For most modern 
+Java projects, Files.readString() is the simplest and most efficient for small to medium-sized files.
+Geek ForGeeks
+AbhisHEK   

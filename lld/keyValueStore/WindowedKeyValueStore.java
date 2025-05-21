@@ -1,4 +1,4 @@
-package others;
+package lld.keyValueStore;
 
 import java.util.*;
 
@@ -60,10 +60,7 @@ public class WindowedKeyValueStore {
         Cache cache = keyValueStore.get(key);
         if (cache.expiringTime < System.currentTimeMillis()) {
             // Evict expired entries on get
-            sum -= cache.value;
-            count--;
-            keyValueStore.remove(key);
-            expiryQueue.remove(cache);
+            clearExpiredValues();
             return -1;
         }
 
@@ -121,5 +118,10 @@ public class WindowedKeyValueStore {
         System.out.println("Average at T + 30s: " + store.getAverage());
         // Expected: (50 + 60) / 2 = 55.0
         // Explanation: d (T + 10s) expired at T + 25s, only e and f remain
+
+        System.out.println("get value of a " + store.get("a")); // Now expired
+        System.out.println("get value of e " + store.get("e")); // Not expired
+        Thread.sleep(10_000);
+        System.out.println("get value of e " + store.get("e")); // Now expired
     }
 }
