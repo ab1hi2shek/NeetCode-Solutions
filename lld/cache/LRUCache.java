@@ -2,8 +2,6 @@ package lld.cache;
 
 import java.util.*;
 
-import org.w3c.dom.Node;
-
 class CacheNode {
     int value;
     String key;
