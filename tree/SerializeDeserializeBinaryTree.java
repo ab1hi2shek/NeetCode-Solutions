@@ -16,6 +16,19 @@ class TreeNode {
 }
 
 /**
+ * Custom class wrapper to manipulate the index.
+ * this is better way of doing int[] index = new int[1]; and then incrememnting
+ * like index[0]++;
+ */
+class Index {
+    int value;
+
+    Index(final int value) {
+        this.value = value;
+    }
+}
+
+/**
  * This class handles the serialization and deserialization of a binary
  * tree using preorder traversal (root-left-right)
  */
@@ -56,9 +69,8 @@ public class SerializeDeserializeBinaryTree {
 
         String[] nodes = data.split(",");
 
-        // Using index as java array to preserve the order of indices.
-        int[] index = new int[1];
-        index[0] = 0; // init index as zero.
+        // Using index class to preserve the order of indices with initializing as zero.
+        Index index = new Index(0);
         TreeNode root = deserializeByPreOrderTraversal(nodes, index);
 
         return root;
@@ -90,14 +102,14 @@ public class SerializeDeserializeBinaryTree {
      * @param counter
      * @return
      */
-    private TreeNode deserializeByPreOrderTraversal(String[] nodes, int[] index) {
+    private TreeNode deserializeByPreOrderTraversal(String[] nodes, Index index) {
 
-        if (index[0] >= nodes.length || nodes[index[0]].equals("null")) {
-            index[0]++; // You must move forward in the array even if you’re hitting a "null".
+        if (index.value >= nodes.length || nodes[index.value].equals("null")) {
+            index.value++; // You must move forward in the array even if you’re hitting a "null".
             return null;
         }
 
-        TreeNode root = new TreeNode(Integer.parseInt(nodes[index[0]++]));
+        TreeNode root = new TreeNode(Integer.parseInt(nodes[index.value++]));
         root.left = deserializeByPreOrderTraversal(nodes, index);
         root.right = deserializeByPreOrderTraversal(nodes, index);
 
