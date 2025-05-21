@@ -1,38 +1,38 @@
 package tree;
 
 /**
- * Tree Node to build a tree.
- */
-class TreeNode {
-    int val;
-    TreeNode left;
-    TreeNode right;
-
-    TreeNode(final int val) {
-        this.val = val;
-        this.left = null;
-        this.right = null;
-    }
-}
-
-/**
- * Custom class wrapper to manipulate the index.
- * this is better way of doing int[] index = new int[1]; and then incrememnting
- * like index[0]++;
- */
-class Index {
-    int value;
-
-    Index(final int value) {
-        this.value = value;
-    }
-}
-
-/**
  * This class handles the serialization and deserialization of a binary
  * tree using preorder traversal (root-left-right)
  */
 public class SerializeDeserializeBinaryTree {
+
+    /**
+     * Tree Node to build a tree.
+     */
+    private static class TreeNode {
+        int val;
+        TreeNode left;
+        TreeNode right;
+
+        TreeNode(final int val) {
+            this.val = val;
+            this.left = null;
+            this.right = null;
+        }
+    }
+
+    /**
+     * Custom class wrapper to manipulate the index.
+     * this is better way of doing int[] index = new int[1]; and then incrememnting
+     * like index[0]++;
+     */
+    private static class Index {
+        int value;
+
+        Index(final int value) {
+            this.value = value;
+        }
+    }
 
     SerializeDeserializeBinaryTree() {
 
