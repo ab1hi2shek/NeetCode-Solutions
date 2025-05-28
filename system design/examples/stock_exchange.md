@@ -32,7 +32,7 @@
 
  ![image](/assets/real_time_pricing.png)
 
-###Flow Steps
+### Flow Steps
 
 **1. Exchange Price Feed Ingestion**
  - Each exchange connection is handled by a small number of `update service`.
@@ -62,7 +62,7 @@
 | ---------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | Redis Pub/Sub is volatile              | Messages are lost if a service is down or reconnects late.                          | Use **Redis Streams** (instead of pure pub/sub) if you need durability. Same low-latency, but adds durability, backpressure handling, and replay.   |
 | Redis Pub/Sub doesn’t scale infinitely | Millions of subscriptions can choke Redis.                                          | Horizontally partition Redis per asset class (BTC, STOCK, etc.).          |
-| 🔄 User to Channel Mapping               | Redis doesn't track subscribers — you need to manage sessions + mapping separately. | Maintain user-to-channel mapping in app memory or lightweight Redis sets. |
+| User to Channel Mapping               | Redis doesn't track subscribers — you need to manage sessions + mapping separately. | Maintain user-to-channel mapping in app memory or lightweight Redis sets. |
 | No Replay of Missed Updates           | New connections miss events published before they subscribed.                       | Again, Redis Streams can fix this. |
 
 
@@ -215,7 +215,7 @@ In Flink Job – You Do Two Things:
   - To TimescaleDB for storage (e.g., historical charts)
 ```
 
-** Here, what redis data structure to use?
+**Here, what redis data structure to use?** 
 
 Use Normal Redis Key-Value as only storing aggregates per window. Flink already handles the aggregation window internally, so storing all individual ticks in Redis may be redundant
 
@@ -267,7 +267,7 @@ But Redis Pub/Sub is often used in addition to Kafka for performance and simplic
 ## ❓ WebSocket Pricing Service Scalability
 
 You’ll eventually hit scaling limits with a single service doing:
-1. anaging 1M+ concurrent WebSocket connections
+1. Managing 1M+ concurrent WebSocket connections
 2. Receiving updates
 3. Pushing updates to correct clients
 
@@ -662,6 +662,150 @@ To ensure **99.99% availability** (\~52.6 minutes downtime/year) for a **real-ti
 
 ----
 ----
+
+##
+
+Excellent follow-up — let’s clarify when to use **Kafka vs. Redis** for **real-time pricing** and how the **Pricing service** should subscribe.
+
+---
+
+### 🧩 First, What Is the "Pricing Service" Subscribing To?
+
+In your real-time pricing system, the **Pricing service** (or any consumer) needs to subscribe to **streams of price updates**, e.g.:
+
+* Asset price feeds (BTC/USD, AAPL, TSLA, etc.)
+* Alerts or events (e.g., “Price crossed threshold”)
+* Internal analytics signals
+
+---
+---
+
+## ❓ Should pricing service (real-time pricing component) subscribe to kafa topics or redis topics
+
+Great question. Let’s break down **how subscribing to Kafka vs Redis Pub/Sub actually works**, both **conceptually** and in terms of **implementation and behavior**.
+
+### 🔄 1. **Redis Pub/Sub – How It Works**
+
+### Concept
+
+* Publisher sends a message to a **channel** (e.g., `"AAPL"`).
+* All clients **currently subscribed** to that channel get the message.
+* If a subscriber is **disconnected**, the message is **lost** for them.
+
+### Features
+
+* **Ephemeral**: No persistence.
+* **One-to-many**: Message fan-out to all current subscribers.
+* **No backpressure**, **no retries**, **no delivery guarantees**.
+* Super low latency, but fragile under load or failures.
+
+---
+
+### 2. **Kafka – How It Works**
+
+### Concept
+
+* Producer writes to a **topic** (e.g., `"price.AAPL"`).
+* Consumers read from the topic using a **consumer group** and **offset tracking**.
+* Messages are **persistent**, **ordered**, and **replayable**.
+* Consumers can be **stateless** and recover from crashes.
+
+### Features
+
+* **Durable**: Messages stored for hours/days/weeks.
+* **Scalable**: Partitions allow horizontal scaling.
+* **Replayable**: Re-read from any offset.
+* **Backpressure-aware**: Consumers pull at their own pace.
+* Ideal for large-scale systems.
+
+## 🔍 Key Differences for Subscription Logic
+
+| Feature              | Redis Pub/Sub                    | Kafka                                  |
+| -------------------- | -------------------------------- | -------------------------------------- |
+| **Connection type**  | TCP, keeps connection open       | TCP, but allows reconnect/retry        |
+| **Message delivery** | Fire-and-forget (only live subs) | Reliable, guaranteed once-per-consumer |
+| **Consumer scale**   | All consumers get same message   | Each consumer group gets its own copy  |
+| **Persistence**      | ❌ No                             | ✅ Yes (disk-backed)                    |
+| **Message replay**   | ❌ No                             | ✅ Yes (via offsets)                    |
+| **Use case**         | Light, fast, small-scale fan-out | Reliable stream processing, high-scale |
+
+---
+
+## 🧠 When to Use Which?
+
+| Situation                                             | Use Redis Pub/Sub | Use Kafka |
+| ----------------------------------------------------- | ----------------- | --------- |
+| Just need to push data fast to open WebSocket clients | ✅                 | ❌         |
+| Need to persist and replay missed updates             | ❌                 | ✅         |
+| Handle 100K+ messages/sec and durable fan-out         | ❌                 | ✅         |
+| Keep infra light/simple                               | ✅                 | ❌         |
+| Expect consumer crashes, retries, scaling             | ❌                 | ✅         |
+
+
+
+### 🧠 Redis Pub/Sub vs Kafka — Summary of Use Cases for real-time pricing
+
+| Feature                    | **Redis Pub/Sub**                    | **Kafka**                                        |
+| -------------------------- | ------------------------------------ | ------------------------------------------------ |
+| **Latency**                | Ultra-low (\~sub-millisecond)        | Low (<10ms with tuning)                          |
+| **Durability**             | ❌ No                                 | ✅ Yes                                            |
+| **Message replay**         | ❌ No                                 | ✅ Yes (offsets per consumer)                     |
+| **Backpressure support**   | ❌ None                               | ✅ Built-in                                       |
+| **Horizontal Scalability** | ❌ Poor (single shard)                | ✅ Excellent (partitioning + brokers)             |
+| **Use Case**               | Best for short-lived, ephemeral data | Best for large-scale streaming, recovery, replay |
+
+---
+
+### What You Should Do in a Large Real-Time System
+
+#### 🏗️ **Architecture: Kafka as Source of Truth, Redis for Speed**
+
+Use **Kafka as your central event backbone**, and optionally **Redis Pub/Sub or Redis cache for fast access** at the edge.
+
+#### Example:
+
+1. **Price Feed (e.g., Bloomberg, Coinbase, NYSE)** → Streams price ticks to **Kafka topics** (e.g., `price.AAPL`, `price.BTC`).
+2. **Pricing Service**:
+
+   * Subscribes to relevant **Kafka topics**.
+   * Processes and stores the latest price, triggers alerts, etc.
+   * Optionally **writes the latest price to Redis** for fast reads or local caching.
+3. **Frontend / Alert Workers**:
+
+   * Fetch latest price from Redis (low latency).
+   * For events or triggers, consume from Kafka or receive push from a worker.
+
+---
+
+### 🔁 When to Add Redis Pub/Sub (Optional Layer)
+
+You can still use **Redis Pub/Sub** for ultra-fast local broadcast — like this:
+
+* Kafka → Pricing Service → publishes to Redis Pub/Sub for **local consumers** (e.g., frontend WebSocket workers).
+* Redis delivers to active connections (WebSocket clients).
+* This **reduces Kafka fan-out pressure** for user-facing systems.
+
+**But:**
+
+* Don't rely on Redis Pub/Sub as your primary bus.
+* Don't expect it to handle persistence, replay, or fault tolerance.
+
+---
+
+### 🔧 Conclusion: Should Pricing Service Subscribe to Kafka Directly?
+
+> ✅ **Yes. Your Pricing Service should subscribe directly to Kafka topics.**
+> Kafka is your reliable, scalable event bus.
+
+Then you can optionally push processed output to Redis (as:
+
+* `SET price:AAPL 191.56`
+* or publish to `redis.publish('AAPL', price)` for WebSocket delivery).
+
+---
+---
+
+
 
 
 
