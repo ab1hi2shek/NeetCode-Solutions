@@ -853,13 +853,10 @@ Split your services by responsibility:
 | Fault tolerance      | ⚠ Rebalance issues | ✅ Decoupled components     |
 | Maintainability      | ❌ Complex logic    | ✅ Clear separation         |
 
----
 
 ## So Final Answer
-
-> No – Don't use Pricing Service to consume from Kafka directly and fan-out to clients.
-
-> Yes – Use Kafka for ingestion and aggregation → Redis for latest prices → Pub/Sub (e.g., Redis or NATS) → WebSocket Push Layer for fan-out.
+1. No – Don't use Pricing Service to consume from Kafka directly and fan-out to clients.
+2. Yes – Use Kafka for ingestion and aggregation → Redis for latest prices → Pub/Sub (e.g., Redis or NATS) → WebSocket Push Layer for fan-out.
 
 ----
 -----
