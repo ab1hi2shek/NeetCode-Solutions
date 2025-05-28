@@ -122,6 +122,7 @@ Use Elasticsearch only if you need rich alert querying/filtering by price range 
 
 
 -----
+-----
 
 
 ### ❓ Lifecycle of an Alert
@@ -133,12 +134,16 @@ Use Elasticsearch only if you need rich alert querying/filtering by price range 
     - Send event to Notification Service.
 5. Remove alert from cache.
 
+-----
+-----
+
 ## ❓ AvoidDe-duplication of Alerts
 You handle alert removal post-trigger. Add a `triggered=true flag` in DB before sending alert to Notification Service to:
 1. Avoid race condition (e.g. double firing if evaluator retries).
 2. Prevent duplicate notifications.
 
 ----
+-----
 
 ## ❓ Redis vs Apache Flink for real-time average + historical aggregate use case
 
@@ -222,6 +227,7 @@ HSET avg:BTC current 105.5 1min 105.23 5min 104.87
 
 
 -----
+-----
 
 ## ❓ Why use redis pub/sub if kafka can directly update the pricing service?
 
@@ -256,6 +262,7 @@ But Redis Pub/Sub is often used in addition to Kafka for performance and simplic
 | You want both                                                | Kafka → Processor → Redis Pub/Sub |
 
 ----
+-----
 
 ## ❓ WebSocket Pricing Service Scalability
 
@@ -293,6 +300,7 @@ Can scale horizontally with sticky sessions + load balancer OR use something lik
 
 
 ----
+-----
 
 ## ❓ Flink Fault Tolerance (High Availability & Exactly-Once Guarantees)
 
@@ -310,95 +318,84 @@ Can scale horizontally with sticky sessions + load balancer OR use something lik
 
  Here’s a comprehensive breakdown of how to **scale each component** of your real-time pricing, average, alerts, and historical data system for **100M Daily Active Users (DAU)**, **thousands of assets**, and **billions of price ticks and alerts**:
 
----
 
-### ⚙️ 1. **API Gateway & Load Balancer**
+### 1. **API Gateway & Load Balancer**
 
 * **Horizontal Scaling**: Deploy multiple gateway instances behind a global load balancer (like AWS ALB + Route53, Cloudflare).
 * **Rate Limiting & Auth**: Use distributed rate limiters (e.g., Envoy, Kong with Redis) and token-based auth (JWT + CDN edge caching).
 * **Edge Locations**: Use CDN (Cloudflare Workers, Fastly, Lambda\@Edge) for request routing and caching static/near-static data.
 
----
 
-### ⚙️ 2. **Pricing Service (WebSocket Real-time Updates)**
+### 2. **Pricing Service (WebSocket Real-time Updates)**
 
 * **Connection Sharding**: Distribute connections by asset ID or region across pricing service pods.
 * **WebSocket Fanout**: Use systems like **NATS**, **Socket.IO Redis adapter**, or **Kafka + WS fanout layer** to scale WebSocket broadcasts.
 * **Backpressure Management**: Implement dropping/throttling strategies or queue buffers to prevent overload.
 * **Stateless Design**: Store connection/session metadata in Redis or DynaCache (e.g., for reconnect logic).
 
----
 
-### ⚙️ 3. **Kafka**
+### 3. **Kafka**
 
 * **Topic Partitioning**: Partition by asset or asset+exchange combo to parallelize processing.
 * **Cluster Scaling**: Scale brokers, controller quorum (KRaft mode), disk throughput (SSD), and network bandwidth.
 * **Retention Strategy**: Keep only short-term raw ticks (1–3 days) if not needed forever; use Flink to materialize aggregates elsewhere.
 
----
 
-### ⚙️ 4. **Apache Flink**
+### 4. **Apache Flink**
 
 * **Horizontal Scaling**: Increase task managers and parallelism.
 * **State Backend**: Use RocksDB with incremental checkpointing + external durable storage (S3/GCS) to recover state.
 * **Checkpointing**: Configure 5–10s interval for fast failure recovery.
 * **Job Segregation**: Separate jobs for average computation, aggregates, alert pre-processing to isolate failure domains.
 
----
 
-### ⚙️ 5. **Redis (Real-time Prices + Pub/Sub + Alert Cache)**
+### 5. **Redis (Real-time Prices + Pub/Sub + Alert Cache)**
 
 * **Sharding**: Use Redis Cluster to shard by asset or alert ID.
 * **Persistence**: Turn on RDB or AOF depending on importance of recovery.
 * **Scaling Pub/Sub**: Redis Pub/Sub is limited; use Redis Streams or a dedicated pub/sub system (NATS, Kafka) if scale hits limits.
 * **Eviction Policy**: Use LRU for real-time prices; TTL for alerts.
 
----
 
-### ⚙️ 6. **TimeScaleDB (Historical Data)**
+### 6. **TimeScaleDB (Historical Data)**
 
 * **Time Partitioning**: Use time + asset-based partitioning and hypertables.
 * **Compression**: Enable native compression for old data.
 * **Write Scaling**: Use parallel COPY or batching via Kafka Connect → Timescale.
 * **Read Scaling**: Read replicas for chart rendering, trends, or exports.
 
----
 
-### ⚙️ 7. **Price Evaluator Service**
+### 7. **Price Evaluator Service**
 
 * **Horizontal Scaling**: Stateless service – scale based on partitions or asset load.
 * **Efficient Polling**: Use Redis ZSET or LIST with blocking pop for new ticks.
 * **Batch Evaluation**: Process multiple alerts per tick in one shot.
 * **Worker Partitioning**: Route alerts by user ID hash or asset ID to scale evaluation.
 
----
 
-### ⚙️ 8. **Alert Service**
+### 8. **Alert Service**
 
 * **High-Volume Write Support**: Use batched writes to DynamoDB with write throughput tuning.
 * **Query Patterns**: Keep active alerts in Redis for fast access; batch refresh from DB every few minutes.
 * **Async Processing**: Queue heavy operations (like alert cleanup, stats) to background workers (SQS + Lambda or Kafka).
 
----
 
-### ⚙️ 9. **DynamoDB (Alert Storage)**
+### 9. **DynamoDB (Alert Storage)**
 
 * **Partition Key Design**: Use `userId#assetId` or `alertId` pattern to spread partitions.
 * **Auto Scaling**: Enable on-demand mode or provisioned with auto-scaling.
 * **Streams**: Use DynamoDB Streams to react to alert updates or audit logs.
 
----
 
-### ⚙️ 10. **Notification Service (Push + Email)**
+### 10. **Notification Service (Push + Email)**
 
 * **Queue-based Fanout**: Use SQS/Kafka to buffer notifications per channel.
 * **Deduplication**: Alert ID + timestamp de-duplication before pushing.
 * **Provider Scaling**: Use managed push/email providers (SNS, SES, Firebase) with rate control.
 * **Retries**: Implement retry queues for failed notifications.
 
----
 
-### 📊 Scaling Strategy Summary by Load Domain
+### Scaling Strategy Summary by Load Domain
 
 | Load Domain            | Strategy                                                             |
 | ---------------------- | -------------------------------------------------------------------- |
@@ -407,9 +404,6 @@ Can scale horizontally with sticky sessions + load balancer OR use something lik
 | **Billions of Ticks**  | Flink + Kafka, short retention in Kafka, rollup aggregates           |
 | **Billions of Alerts** | Evaluate in batches via Flink or workers, Redis + DynamoDB combo     |
 
----
-
-Would you like me to convert this into a detailed **interview-ready cheat sheet**, or a table-based doc for each component?
 
 ----
 ----
@@ -418,11 +412,10 @@ Would you like me to convert this into a detailed **interview-ready cheat sheet*
 
 Here’s a **deep dive into how to serve real-time pricing, alerts, and average prices with ultra-low latency**, based on your HLD:
 
----
 
-## ⚙️ 1. **Real-time Price Serving (Ultra-low Latency)**
+## 1. **Real-time Price Serving (Ultra-low Latency)**
 
-### 🔄 Flow:
+### Flow:
 
 1. **Exchange → Kafka**:
    Price ticks per second per asset pushed to Kafka (partitioned by asset).
@@ -438,7 +431,7 @@ Here’s a **deep dive into how to serve real-time pricing, alerts, and average 
    * Pricing service subscribes to Redis Pub/Sub channel for that asset.
    * On new price → send it directly over WebSocket to client.
 
-### ✅ Why This Is Ultra-fast:
+### Why This Is Ultra-fast:
 
 | Layer     | Tech Used | Reason for Low Latency                 |
 | --------- | --------- | -------------------------------------- |
@@ -446,17 +439,16 @@ Here’s a **deep dive into how to serve real-time pricing, alerts, and average 
 | Cache     | Redis     | Sub-millisecond read + pub/sub         |
 | Delivery  | WebSocket | Persistent low-latency connection      |
 
-### 🔥 Optimization Tips:
+### Optimization Tips:
 
 * **Avoid REST APIs** for live prices.
 * Use **Gzip or Protobuf** for WebSocket payloads.
 * Tune Redis with `tcp_nodelay` and optimized eviction policy.
 
----
 
-## ⚙️ 2. **Real-time Alert Evaluation**
+## 2. **Real-time Alert Evaluation**
 
-### 🔄 Flow:
+### Flow:
 
 1. **Price Tick → Kafka**: as before.
 2. **Flink Job (or custom Kafka consumer)**:
@@ -467,28 +459,26 @@ Here’s a **deep dive into how to serve real-time pricing, alerts, and average 
 3. **Send to Notification Service** via Kafka or SQS for downstream fanout (Push/Email).
 4. **Deduplication & TTL**: Track sent alerts in Redis (`SET alertId:triggered`) to avoid duplicates.
 
-### 📌 Storage Strategy:
+### Storage Strategy:
 
 * **DynamoDB**: Persistent alert definitions (indexed by `userId`, `assetId`).
 * **Redis**: Hot cache of active alerts per asset for fast access during evaluation.
 
-### ✅ Low Latency Guarantees:
+### Low Latency Guarantees:
 
 * Redis read time for alerts <1ms.
 * Kafka-to-Flink-to-notification pipeline end-to-end target latency: **<300ms**.
 * Alerts sent within sub-second of price condition match.
 
-### 🧠 Best Practices:
+### Best Practices:
 
 * Keep alerts in **sorted sets** (`ZADD assetId alertThreshold`) → fast range queries.
 * In Flink or consumer, **batch evaluate per asset tick**.
 * **Use local state or in-memory alert store** (backed by Redis snapshot) to avoid DynamoDB lookup per tick.
 
----
+## 3. **Real-time and Historical Averages**
 
-## ⚙️ 3. **Real-time and Historical Averages**
-
-### 🔄 Flow:
+### Flow:
 
 1. **Flink Job (Aggregation)**:
 
@@ -504,21 +494,21 @@ Here’s a **deep dive into how to serve real-time pricing, alerts, and average 
    * **Current average** from Redis (`GET assetId:avg:1m`, `5m`, etc.).
    * **Historical averages** from TimescaleDB using assetId and time range.
 
-### 🏎️ Speed Factors:
+### Speed Factors:
 
 | Data Type  | Store       | Latency               |
 | ---------- | ----------- | --------------------- |
 | 1-min Avg  | Redis       | \~1ms                 |
 | Historical | TimescaleDB | \~100ms+ (for charts) |
 
-### 🧠 Redis Key Schema (examples):
+### Redis Key Schema (examples):
 
 ```bash
 SET btc:avg:1m 27450.32
 SET btc:avg:5m 27388.12
 ```
 
-### 🛠️ Optimization:
+### Optimization:
 
 * Pre-compute common durations.
 * Use **TimeWindowed Aggregates in Flink**.
@@ -526,7 +516,7 @@ SET btc:avg:5m 27388.12
 
 ---
 
-## ⚡ Overall Real-Time Guarantees
+## Overall Real-Time Guarantees
 
 | Use Case            | Target Latency  | Key Enabler                        |
 | ------------------- | --------------- | ---------------------------------- |
@@ -535,19 +525,14 @@ SET btc:avg:5m 27388.12
 | Real-Time Avg Query | \~1ms           | Redis + Pre-aggregation            |
 | Historical Query    | \~100ms – 300ms | TimescaleDB (read-optimized)       |
 
----
 
-## 📦 When Not to Use Kafka → Redis → Pub/Sub
+## When Not to Use Kafka → Redis → Pub/Sub
 
 | Case                               | Recommendation                                                       |
 | ---------------------------------- | -------------------------------------------------------------------- |
 | Ultra-high volume topics (1M+/sec) | Use **Kafka Streams or Flink only**                                  |
 | Pub/Sub scaling limits (Redis)     | Replace Redis Pub/Sub with **NATS, Apache Pulsar, or Kafka streams** |
 | Complex stream joins/aggregates    | Use **Apache Flink or ksqlDB**                                       |
-
----
-
-Would you like me to summarize this into a visual system flow, or do a mock interview-style pitch with these ideas?
 
 ----
 ----
@@ -557,26 +542,24 @@ Would you like me to summarize this into a visual system flow, or do a mock inte
 
 To ensure **99.99% availability** (\~52.6 minutes downtime/year) for a **real-time pricing and alerting system** at this scale (100M DAU, 10K assets, billions of alerts), you must design for **resilience, redundancy, isolation, and failover** across all layers.
 
----
 
-## 🧱 1. **Infrastructure & Hosting**
+## 1. **Infrastructure & Hosting**
 
-### ✅ Multi-Region, Multi-AZ Deployment
+### Multi-Region, Multi-AZ Deployment
 
 * Deploy all services across **at least 3 Availability Zones**.
 * Use **multi-region failover** (e.g., AWS Global Accelerator + Route53 for latency routing).
 * Use **health checks + circuit breakers** for failover.
 
-### ✅ Container Orchestration (K8s / ECS)
+### Container Orchestration (K8s / ECS)
 
 * Auto-healing pods
 * Horizontal Pod Autoscaling (based on CPU/network usage)
 
----
 
-## 🧠 2. **Data Layer Availability**
+## 2. **Data Layer Availability**
 
-### 🔹 **Redis (Real-Time Cache)**
+### **Redis (Real-Time Cache)**
 
 * Use **Redis Cluster** (multi-node with partitioning + replication)
 * Enable **Redis Sentinel** or AWS ElastiCache Multi-AZ
@@ -588,19 +571,18 @@ To ensure **99.99% availability** (\~52.6 minutes downtime/year) for a **real-ti
 * Replication factor of **≥3** for each topic
 * Use **Kafka MirrorMaker** for region-to-region failover
 
-### 🔹 **Flink (Aggregations & Alert Evaluation)**
+### **Flink (Aggregations & Alert Evaluation)**
 
 * Deployed in **high-availability mode** with checkpointing (HA job manager)
 * Store state in **durable, replicated storage** (e.g., S3, GCS)
 
-### 🔹 **Persistent DB (DynamoDB / TimescaleDB)**
+### **Persistent DB (DynamoDB / TimescaleDB)**
 
 * **DynamoDB**: Multi-region global tables, automatic replication
 * **TimescaleDB**: Deployed with streaming replication + read replicas across regions
 
----
 
-## 📞 3. **APIs & WebSocket Services**
+## 3. **APIs & WebSocket Services**
 
 * Use **load balancers** (e.g., ALB/NLB) with health checks and zone failover
 * **WebSocket Gateway** (e.g., AWS API Gateway + Lambda or custom K8s WS services) should autoscale
@@ -608,16 +590,15 @@ To ensure **99.99% availability** (\~52.6 minutes downtime/year) for a **real-ti
 
 ---
 
-## 🚨 4. **Alerting System Reliability**
+## 4. **Alerting System Reliability**
 
 * Alerts can’t be missed → **durable queueing + retry**
 * Use Kafka + backup SQS for notifications
 * Ensure **idempotency** and **deduplication** (Redis keys or UUIDs)
 * Fall back to email if push fails
 
----
 
-## 🔁 5. **Resilience Patterns**
+## 5. **Resilience Patterns**
 
 | Pattern                  | Description                                               |
 | ------------------------ | --------------------------------------------------------- |
@@ -627,9 +608,8 @@ To ensure **99.99% availability** (\~52.6 minutes downtime/year) for a **real-ti
 | **Graceful Degradation** | If real-time data fails, serve last known data from Redis |
 | **Dead Letter Queues**   | Catch alert delivery failures for later retry             |
 
----
 
-## 📊 6. **Monitoring & Auto-Healing**
+## 6. **Monitoring & Auto-Healing**
 
 * Use Prometheus + Grafana + AWS CloudWatch
 * Alert on:
@@ -644,9 +624,8 @@ To ensure **99.99% availability** (\~52.6 minutes downtime/year) for a **real-ti
   * Redis CPU/memory
   * API/WebSocket QPS
 
----
 
-## 🗃️ 7. **Backups and Disaster Recovery**
+## 7. **Backups and Disaster Recovery**
 
 * Periodic snapshots of:
 
@@ -656,9 +635,8 @@ To ensure **99.99% availability** (\~52.6 minutes downtime/year) for a **real-ti
 * RTO (Recovery Time Objective): < 5 mins
 * RPO (Recovery Point Objective): < 1 min
 
----
 
-## 🧪 8. **Testing for High Availability**
+## 8. **Testing for High Availability**
 
 * Chaos Engineering (e.g., Netflix’s Chaos Monkey)
 * Simulate:
@@ -668,9 +646,8 @@ To ensure **99.99% availability** (\~52.6 minutes downtime/year) for a **real-ti
   * Flink JobManager crash
   * Region-wide failover
 
----
 
-## ✅ Summary: What Enables 99.99%?
+## Summary: What Enables 99.99%?
 
 | Component                  | Strategy                                       |
 | -------------------------- | ---------------------------------------------- |
@@ -683,9 +660,8 @@ To ensure **99.99% availability** (\~52.6 minutes downtime/year) for a **real-ti
 | **Monitoring**             | Full-stack + self-healing triggers             |
 | **Disaster Recovery**      | Automated, under 5 min RTO/RPO                 |
 
----
-
-Would you like a quick checklist PDF or HLD annotation with these changes?
+----
+----
 
 
 
