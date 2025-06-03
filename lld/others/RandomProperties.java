@@ -130,16 +130,19 @@ public class RandomProperties {
         for (Property property : properties) {
             maxCombinations = maxCombinations * property.getValues().size();
         }
-        int target = Math.min(maxCombinations, numberOfProperties);
+
+        if (numberOfProperties > maxCombinations) {
+            throw new IllegalArgumentException("error");
+        }
 
         List<List<RandomOutput>> output = new ArrayList<>();
         Set<List<RandomOutput>> uniqueEntries = new HashSet<>();
-        while (target > 0) {
+        while (numberOfProperties > 0) {
             List<RandomOutput> randomEntry = generateARandomEntry();
 
             if (!uniqueEntries.contains(randomEntry)) {
                 output.add(randomEntry);
-                target--;
+                numberOfProperties--;
                 uniqueEntries.add(randomEntry);
             }
         }
@@ -196,7 +199,7 @@ public class RandomProperties {
         printBeautifully(randomOutput);
 
         // Call unique random properties generation
-        List<List<RandomOutput>> randomUniqueOutput = randomProperties.generateUniqueRandomProperty(10);
+        List<List<RandomOutput>> randomUniqueOutput = randomProperties.generateUniqueRandomProperty(4);
         printBeautifully(randomUniqueOutput);
 
     }
